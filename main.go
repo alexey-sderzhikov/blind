@@ -8,20 +8,22 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const basic = `This is a basic test text`
+const basic = `This is a basic test text for training with blind typing! This is a basic test text for training with blind typing! This is a basic test text for training with blind typing! This is a basic test text for training with blind typing! This is a basic test text for training with blind typing! This is a basic test text for training with blind typing! This is a basic test text for training with blind typing!This is a basic test text for training with blind typing!`
 
 var (
-	mistakeStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Background(lipgloss.Color("196"))
+	mistakeStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("234")).Background(lipgloss.Color("202"))
 	placeholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("254"))
-	textStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	textStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("238")).Bold(true)
+	cursorStyle      = lipgloss.NewStyle().Background(lipgloss.Color("248"))
+	titleStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Bold(true)
+	borderStyle      = lipgloss.NewStyle().Width(100)
 )
 
 type model struct {
-	text        string
-	placeholder string
+	text        []rune
+	placeholder []rune
 	cursor      int
 	mistakes    map[int]bool
-	currentView string
 }
 
 func (m model) Init() tea.Cmd {
@@ -45,11 +47,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		default:
 			// TODO should use runes
-			if string(m.placeholder[m.cursor]) != msg.String() {
-				m.mistakes[m.cursor] = true
+			if len(msg.Runes) == 1 {
+				if m.placeholder[m.cursor] != msg.Runes[0] {
+					m.mistakes[m.cursor] = true
+				}
+				m.cursor++
+				m.text = append(m.text, msg.Runes...)
 			}
-			m.cursor++
-			m.text += msg.String()
 		}
 	}
 
@@ -57,7 +61,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	var view string
+	title := titleStyle.Render(fmt.Sprintf("Mistakes: %d %d%%", len(m.mistakes), 100-((len(m.text)%100)*len(m.mistakes))))
+	var view = title + "\n"
 	for i, r := range m.text {
 		if m.mistakes[i] {
 			view += mistakeStyle.Render(string(m.placeholder[i]))
@@ -66,7 +71,9 @@ func (m model) View() string {
 		}
 	}
 
-	return view + placeholderStyle.Render(m.placeholder[m.cursor:])
+	view += cursorStyle.Render(string(m.placeholder[m.cursor])) + placeholderStyle.Render(string(m.placeholder[m.cursor+1:]))
+
+	return borderStyle.Render(view)
 }
 
 func main() {
@@ -79,8 +86,8 @@ func main() {
 
 func initialModel() model {
 	return model{
-		text:        "",
-		placeholder: basic,
+		text:        make([]rune, 0),
+		placeholder: []rune(basic),
 		cursor:      0,
 		mistakes:    make(map[int]bool),
 	}
