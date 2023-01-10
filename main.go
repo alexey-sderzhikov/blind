@@ -60,8 +60,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func calcPercentageAcc(text, mistakes int) int {
+	tperc := float32(text) / 100
+	mperc := float32(mistakes) / tperc
+	return int(100 - mperc)
+}
+
 func (m model) View() string {
-	title := titleStyle.Render(fmt.Sprintf("Mistakes: %d %d%%", len(m.mistakes), 100-((len(m.text)%100)*len(m.mistakes))))
+	title := titleStyle.Render(fmt.Sprintf("Mistakes: %d %d%%", len(m.mistakes), calcPercentageAcc(len(m.text), len(m.mistakes))))
 	var view = title + "\n"
 	for i, r := range m.text {
 		if m.mistakes[i] {
