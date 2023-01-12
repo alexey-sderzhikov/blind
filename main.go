@@ -56,7 +56,7 @@ func (m model) Init() tea.Cmd {
 func (m model) navigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEscape:
-		return m, tea.Quit
+		return nil, tea.Quit
 	case tea.KeyUp:
 		if m.cursor > 0 {
 			m.cursor--
@@ -89,7 +89,7 @@ func (m model) updateTypingWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
-			return nil, tea.Quit
+			return m, tea.Quit
 		case "backspace":
 			if m.cursor != 0 {
 				m.cursor--
@@ -164,10 +164,7 @@ func (m model) loadTexts() ([]string, error) {
 
 func main() {
 	p := tea.NewProgram(initialModel())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
-		os.Exit(1)
-	}
+	p.Run()
 }
 
 func initialModel() model {

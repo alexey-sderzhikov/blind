@@ -1,2 +1,5 @@
 texts
 .vscode
+blind
+*.yml
+*.json
