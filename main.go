@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -48,6 +49,14 @@ type model struct {
 	texts             []string
 }
 
+func (m *model) pruneForNewText() {
+	m.cursor = 0
+	m.mistakeCount = 0
+	m.mistakes = make(map[int]bool)
+	m.typedSybmolsCount = 0
+	m.text = make([]rune, 0)
+}
+
 func (m model) Init() tea.Cmd {
 	return nil
 }
@@ -90,6 +99,14 @@ func (m model) updateTypingWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "esc":
 			return m, tea.Quit
+		case "tab":
+			var err error
+			m.placeholder, err = chooseRandomText(m.texts)
+			if err != nil {
+				panic(err)
+			}
+
+			m.pruneForNewText()
 		case "backspace":
 			if m.cursor != 0 {
 				m.cursor--
@@ -159,7 +176,7 @@ func (m model) loadTexts() ([]string, error) {
 		return nil, fmt.Errorf("error during reading text from file: %v", err)
 	}
 
-	return strings.Split(string(b), "\n"), nil
+	return strings.Split(strings.Trim(string(b), "\n"), "\n"), nil
 }
 
 func main() {
@@ -182,17 +199,22 @@ func initialModel() model {
 		panic(err)
 	}
 
-	if len(m.texts) == 0 {
-		panic("empty texts")
-	}
-
-	s1 := rand.NewSource(time.Now().UnixNano())
-	r1 := rand.New(s1)
-
-	m.placeholder = []rune(m.texts[r1.Intn(len(m.texts))])
-	if len(m.placeholder) == 0 {
-		panic("empty placeholder!")
+	m.placeholder, err = chooseRandomText(m.texts)
+	if err != nil {
+		panic(err)
 	}
 
 	return m
+}
+
+func chooseRandomText(texts []string) ([]rune, error) {
+	s1 := rand.NewSource(time.Now().UnixNano())
+	r1 := rand.New(s1)
+
+	text := []rune(texts[r1.Intn(len(texts))])
+	if len(text) == 0 {
+		return nil, errors.New("chosen text is empty")
+	}
+
+	return text, nil
 }
