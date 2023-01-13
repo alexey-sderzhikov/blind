@@ -16,7 +16,7 @@ var (
 	mistakeStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("234")).Background(lipgloss.Color("202"))
 	placeholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("254"))
 	textStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("238")).Bold(true)
-	cursorStyle      = lipgloss.NewStyle().Background(lipgloss.Color("248"))
+	cursorStyle      = lipgloss.NewStyle().Background(lipgloss.Color("99"))
 	titleStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Bold(true)
 	borderStyle      = lipgloss.NewStyle().Width(100)
 )
@@ -26,6 +26,7 @@ type window int
 const (
 	menu window = iota
 	typing
+	results
 )
 
 func (w window) String() string {
@@ -34,12 +35,14 @@ func (w window) String() string {
 		return "menu"
 	case 1:
 		return "typing"
+	case 2:
+		return "results"
 	}
 	return "unknown"
 }
 
 type model struct {
-	wind              window
+	currendWindow     window
 	text              []rune
 	placeholder       []rune
 	cursor            int
@@ -107,6 +110,8 @@ func (m model) updateTypingWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.pruneForNewText()
+		case "enter":
+			m.currendWindow = results
 		case "backspace":
 			if m.cursor != 0 {
 				m.cursor--
@@ -123,7 +128,11 @@ func (m model) updateTypingWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.mistakes[m.cursor] = true
 				}
 				m.cursor++
-				m.text = append(m.text, msg.Runes...)
+				m.text = append(m.text, msg.Runes[0])
+
+				if m.cursor == len(m.placeholder)-1 {
+					m.currendWindow = results
+				}
 			}
 		}
 	}
@@ -131,24 +140,60 @@ func (m model) updateTypingWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) updateResultsWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc":
+			return m, tea.Quit
+		case "tab", "enter":
+			var err error
+			m.placeholder, err = chooseRandomText(m.texts)
+			if err != nil {
+				panic(err)
+			}
+			m.pruneForNewText()
+			m.currendWindow = typing
+		}
+	}
+
+	return m, nil
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch m.wind {
+	switch m.currendWindow {
 	case menu:
 		return m.updateMenuWindow(msg)
 	case typing:
 		return m.updateTypingWindow(msg)
+	case results:
+		return m.updateResultsWindow(msg)
 	}
 
 	return m, nil
 }
 
 func calcPercentageAcc(text, mistakes int) int {
+	if text == 0 {
+		return 0
+	}
+
 	tperc := float32(text) / 100
 	mperc := float32(mistakes) / tperc
 	return int(100 - mperc)
 }
 
 func (m model) View() string {
+	switch m.currendWindow {
+	case typing:
+		return m.viewTyping()
+	case results:
+		return m.viewResults()
+	}
+	return fmt.Sprintf("not found suitable window for [%s]", m.currendWindow.String())
+}
+
+func (m model) viewTyping() string {
 	title := titleStyle.Render(
 		fmt.Sprintf("Mistakes: %d %d%%",
 			m.mistakeCount,
@@ -170,6 +215,11 @@ func (m model) View() string {
 	return borderStyle.Render(view)
 }
 
+func (m model) viewResults() string {
+	return fmt.Sprintf("Mistakes: %d\nTyped symbols: %d\nAccuracy: %d%%",
+		m.mistakeCount, m.typedSybmolsCount, calcPercentageAcc(m.typedSybmolsCount, m.mistakeCount))
+}
+
 func (m model) loadTexts() ([]string, error) {
 	b, err := os.ReadFile("texts")
 	if err != nil {
@@ -186,11 +236,11 @@ func main() {
 
 func initialModel() model {
 	m := model{
-		wind:         typing,
-		text:         make([]rune, 0),
-		cursor:       0,
-		mistakes:     make(map[int]bool),
-		mistakeCount: 0,
+		currendWindow: typing,
+		text:          make([]rune, 0),
+		cursor:        0,
+		mistakes:      make(map[int]bool),
+		mistakeCount:  0,
 	}
 
 	var err error
