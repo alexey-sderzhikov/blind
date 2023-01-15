@@ -10,13 +10,14 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tjarratt/babble"
 )
 
 var (
 	mistakeStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("234")).Background(lipgloss.Color("202"))
 	placeholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("254"))
 	textStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("238")).Bold(true)
-	cursorStyle      = lipgloss.NewStyle().Background(lipgloss.Color("99"))
+	cursorStyle      = lipgloss.NewStyle().Background(lipgloss.Color("87"))
 	titleStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Bold(true)
 	borderStyle      = lipgloss.NewStyle().Width(100)
 )
@@ -27,6 +28,7 @@ const (
 	menu window = iota
 	typing
 	results
+	mode
 )
 
 func (w window) String() string {
@@ -37,19 +39,26 @@ func (w window) String() string {
 		return "typing"
 	case 2:
 		return "results"
+	case 3:
+		return "mode"
 	}
 	return "unknown"
 }
 
 type model struct {
-	currendWindow     window
-	text              []rune
-	placeholder       []rune
-	cursor            int
-	mistakes          map[int]bool
-	mistakeCount      int
+	currendWindow window
+
+	texts []string // loaded texts
+
+	text        []rune // user's typed text
+	placeholder []rune // expected text
+
+	cursor int // define current symbol in placeholder
+
+	mistakes     map[int]bool // all indexes of mistakes which did user during typing,
+	mistakeCount int
+
 	typedSybmolsCount int
-	texts             []string
 	typedStartTime    time.Time
 	typedEndTime      time.Time
 }
@@ -64,38 +73,6 @@ func (m *model) pruneForNewText() {
 
 func (m model) Init() tea.Cmd {
 	return nil
-}
-
-// navigation logic base for most pages
-func (m model) navigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEscape:
-		return nil, tea.Quit
-	case tea.KeyUp:
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case tea.KeyDown:
-		// if m.cursor < m.objectCount-1 {
-		// 	m.cursor++
-		// }
-	}
-
-	return m, nil
-}
-
-func (m model) updateMenuWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "enter":
-			return nil, tea.Quit
-		default:
-			return m.navigation(msg)
-		}
-	}
-
-	return m, nil
 }
 
 func (m model) updateTypingWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -144,7 +121,7 @@ func (m model) updateTypingWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.text = append(m.text, msg.Runes[0])
 
 			// if typed last symbol then end the test
-			if m.cursor == len(m.placeholder)-1 {
+			if m.cursor == len(m.placeholder) {
 				m.typedEndTime = time.Now()
 				m.currendWindow = results
 			}
@@ -161,11 +138,39 @@ func (m model) updateResultsWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			return m, tea.Quit
 		case "tab", "enter":
-			var err error
-			m.placeholder, err = chooseRandomText(m.texts)
-			if err != nil {
-				panic(err)
+			m.cursor = 0
+			m.currendWindow = mode
+		}
+	}
+
+	return m, nil
+}
+
+func (m model) updateModeWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc":
+			return m, tea.Quit
+		case "up":
+			if m.cursor == 1 {
+				m.cursor = 0
 			}
+		case "down":
+			if m.cursor == 0 {
+				m.cursor = 1
+			}
+		case "enter":
+			if m.cursor == 0 {
+				m.placeholder = generateRandomWords()
+			} else {
+				var err error
+				m.placeholder, err = chooseRandomText(m.texts)
+				if err != nil {
+					panic(err)
+				}
+			}
+
 			m.pruneForNewText()
 			m.currendWindow = typing
 		}
@@ -176,12 +181,12 @@ func (m model) updateResultsWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.currendWindow {
-	case menu:
-		return m.updateMenuWindow(msg)
 	case typing:
 		return m.updateTypingWindow(msg)
 	case results:
 		return m.updateResultsWindow(msg)
+	case mode:
+		return m.updateModeWindow(msg)
 	}
 
 	return m, nil
@@ -203,6 +208,8 @@ func (m model) View() string {
 		return m.viewTyping()
 	case results:
 		return m.viewResults()
+	case mode:
+		return m.viewMode()
 	}
 	return fmt.Sprintf("not found suitable window for [%s]", m.currendWindow.String())
 }
@@ -239,6 +246,17 @@ func (m model) viewResults() string {
 	)
 }
 
+func (m model) viewMode() string {
+	var view string
+	if m.cursor == 0 {
+		view = "> words\ntext"
+	} else {
+		view = "words\n> text"
+	}
+
+	return view
+}
+
 func (m model) loadTexts() ([]string, error) {
 	b, err := os.ReadFile("texts")
 	if err != nil {
@@ -255,7 +273,7 @@ func main() {
 
 func initialModel() model {
 	m := model{
-		currendWindow: typing,
+		currendWindow: mode,
 		text:          make([]rune, 0),
 		cursor:        0,
 		mistakes:      make(map[int]bool),
@@ -286,4 +304,11 @@ func chooseRandomText(texts []string) ([]rune, error) {
 	}
 
 	return text, nil
+}
+
+func generateRandomWords() []rune {
+	bab := babble.NewBabbler()
+	bab.Count = 10
+	bab.Separator = " "
+	return []rune(bab.Babble())
 }
