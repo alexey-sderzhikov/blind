@@ -50,6 +50,8 @@ type model struct {
 	mistakeCount      int
 	typedSybmolsCount int
 	texts             []string
+	typedStartTime    time.Time
+	typedEndTime      time.Time
 }
 
 func (m *model) pruneForNewText() {
@@ -111,6 +113,7 @@ func (m model) updateTypingWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.pruneForNewText()
 		case "enter":
+			m.typedEndTime = time.Now()
 			m.currendWindow = results
 		case "backspace":
 			if m.cursor != 0 {
@@ -121,18 +124,29 @@ func (m model) updateTypingWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.text = m.text[:len(m.text)-1]
 			}
 		default:
-			m.typedSybmolsCount++
-			if len(msg.Runes) == 1 {
-				if m.placeholder[m.cursor] != msg.Runes[0] {
-					m.mistakeCount++
-					m.mistakes[m.cursor] = true
-				}
-				m.cursor++
-				m.text = append(m.text, msg.Runes[0])
+			if len(msg.Runes) != 1 {
+				break
+			}
 
-				if m.cursor == len(m.placeholder)-1 {
-					m.currendWindow = results
-				}
+			m.typedSybmolsCount++
+			// start timer when typed first symbol
+			if m.typedSybmolsCount == 1 {
+				m.typedStartTime = time.Now()
+			}
+
+			// detect mistake if typed sybmol != expected symbol
+			if m.placeholder[m.cursor] != msg.Runes[0] {
+				m.mistakeCount++
+				m.mistakes[m.cursor] = true
+			}
+
+			m.cursor++
+			m.text = append(m.text, msg.Runes[0])
+
+			// if typed last symbol then end the test
+			if m.cursor == len(m.placeholder)-1 {
+				m.typedEndTime = time.Now()
+				m.currendWindow = results
 			}
 		}
 	}
@@ -216,8 +230,13 @@ func (m model) viewTyping() string {
 }
 
 func (m model) viewResults() string {
-	return fmt.Sprintf("Mistakes: %d\nTyped symbols: %d\nAccuracy: %d%%",
-		m.mistakeCount, m.typedSybmolsCount, calcPercentageAcc(m.typedSybmolsCount, m.mistakeCount))
+	t := m.typedEndTime.Sub(m.typedStartTime).Round(time.Second)
+	return fmt.Sprintf("Mistakes: %d\nTyped symbols: %d\nAccuracy: %d%%\nTime: %s",
+		m.mistakeCount,
+		m.typedSybmolsCount,
+		calcPercentageAcc(m.typedSybmolsCount, m.mistakeCount),
+		t.String(),
+	)
 }
 
 func (m model) loadTexts() ([]string, error) {
