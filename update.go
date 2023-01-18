@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -79,7 +80,14 @@ func (m model) updateResultsWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) updateModeWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		// If we set a width on the help menu it can it can gracefully truncate
+		// its view as needed.
+		m.help.Width = msg.Width
 	case tea.KeyMsg:
+		if key.Matches(msg, m.keys.Help) {
+			m.help.ShowAll = !m.help.ShowAll
+		}
 		switch msg.String() {
 		case "esc":
 			return m, tea.Quit

@@ -67,8 +67,7 @@ func (m model) viewMode() string {
 	} else {
 		view = "words\n> text"
 	}
-
-	return view
+	return view + "\n" + m.help.View(m.keys)
 }
 
 func calcPercentageAcc(text, mistakes int) int {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/charmbracelet/bubbles/help"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -11,6 +12,8 @@ func main() {
 
 func initialModel() model {
 	m := model{
+		keys:          keys,
+		help:          help.New(),
 		currendWindow: mode,
 		text:          make([]rune, 0),
 		cursor:        0,
