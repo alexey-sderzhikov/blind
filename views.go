@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -16,16 +17,22 @@ var (
 	borderStyle      = lipgloss.NewStyle().Width(100)
 )
 
-func (m model) View() string {
-	switch m.currendWindow {
-	case typing:
-		return m.viewTyping()
-	case results:
-		return m.viewResults()
-	case mode:
-		return m.viewMode()
+var (
+	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	noStyle      = lipgloss.NewStyle()
+)
+
+func (m model) viewSettings() string {
+	var b strings.Builder
+
+	for i := range m.inputs {
+		b.WriteString(m.inputs[i].View())
+		if i < len(m.inputs)-1 {
+			b.WriteRune('\n')
+		}
 	}
-	return fmt.Sprintf("not found suitable window for [%s]", m.currendWindow.String())
+
+	return b.String()
 }
 
 func (m model) viewTyping() string {
@@ -78,4 +85,18 @@ func calcPercentageAcc(text, mistakes int) int {
 	tperc := float32(text) / 100
 	mperc := float32(mistakes) / tperc
 	return int(100 - mperc)
+}
+
+func (m model) View() string {
+	switch m.currendWindow {
+	case typing:
+		return m.viewTyping()
+	case results:
+		return m.viewResults()
+	case mode:
+		return m.viewMode()
+	case settings:
+		return m.viewSettings()
+	}
+	return fmt.Sprintf("not found suitable window for [%s]", m.currendWindow.String())
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tjarratt/babble"
 )
@@ -21,6 +22,7 @@ const (
 	typing
 	results
 	mode
+	settings
 )
 
 func (w window) String() string {
@@ -33,6 +35,8 @@ func (w window) String() string {
 		return "results"
 	case 3:
 		return "mode"
+	case 4:
+		return "settings"
 	}
 	return "unknown"
 }
@@ -40,27 +44,28 @@ func (w window) String() string {
 // keyMap defines a set of keybindings. To work for help it must satisfy
 // key.Map. It could also very easily be a map[string]key.Binding.
 type keyMap struct {
-	Up    key.Binding
-	Down  key.Binding
-	Left  key.Binding
-	Right key.Binding
-	Help  key.Binding
-	Quit  key.Binding
-	Chose key.Binding
+	Up       key.Binding
+	Down     key.Binding
+	Left     key.Binding
+	Right    key.Binding
+	Help     key.Binding
+	Quit     key.Binding
+	Chose    key.Binding
+	Settings key.Binding
 }
 
 // ShortHelp returns keybindings to be shown in the mini help view. It's part
 // of the key.Map interface.
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Chose, k.Quit, k.Help}
+	return []key.Binding{k.Settings, k.Quit, k.Help}
 }
 
 // FullHelp returns keybindings for the expanded help view. It's part of the
 // key.Map interface.
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Chose}, // first column
-		{k.Help, k.Quit},        // second column
+		{k.Up, k.Down, k.Chose},      // first column
+		{k.Help, k.Settings, k.Quit}, // second column
 	}
 }
 
@@ -85,6 +90,10 @@ var keys = keyMap{
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "quit"),
 	),
+	Settings: key.NewBinding(
+		key.WithKeys("s"),
+		key.WithHelp("s", "settings"),
+	),
 }
 
 type model struct {
@@ -106,6 +115,10 @@ type model struct {
 	typedSybmolsCount int
 	typedStartTime    time.Time
 	typedEndTime      time.Time
+
+	focusIndex int
+	inputs     map[string]textinput.Model
+	cursorMode textinput.CursorMode
 }
 
 func (m *model) pruneForNewText() {
@@ -117,7 +130,7 @@ func (m *model) pruneForNewText() {
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+	return textinput.Blink
 }
 
 func (m model) loadTexts() ([]string, error) {
@@ -146,4 +159,41 @@ func generateRandomWords() []rune {
 	bab.Count = 10
 	bab.Separator = " "
 	return []rune(bab.Babble())
+}
+
+func initialModel() model {
+	m := model{
+		keys:          keys,
+		help:          help.New(),
+		currendWindow: mode,
+		text:          make([]rune, 0),
+		cursor:        0,
+		mistakes:      make(map[int]bool),
+		mistakeCount:  0,
+
+		inputs: make(map[string]textinput.Model, 1), // TODO map instead slice
+	}
+
+	t := textinput.New()
+	t.CursorStyle = cursorStyle
+	t.CharLimit = 32
+	t.Prompt = "Words count"
+	t.Placeholder = "Nickname"
+	t.Focus()
+	t.PromptStyle = focusedStyle
+	t.TextStyle = focusedStyle
+	m.inputs["words"] = t
+
+	var err error
+	m.texts, err = m.loadTexts()
+	if err != nil {
+		panic(err)
+	}
+
+	m.placeholder, err = chooseRandomText(m.texts)
+	if err != nil {
+		panic(err)
+	}
+
+	return m
 }
